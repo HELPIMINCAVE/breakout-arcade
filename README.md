@@ -34,11 +34,11 @@ At the end of every run, permanent **Gems** are earned from Cash, Level and Diff
 
 - **📊 Dynamic Difficulty System:**
 
-**Easy:** Score of $5 gives $1 cash bricks take longer to lose HP shop items are cheaper power‑up drops are 50% higher. Gems are halved.
+**Easy:** Score of 5 Gives $1 cash bricks take longer to lose HP shop items are cheaper power‑up drops are 50% higher. Gems are halved.
 
-**Normal:** Score of $10 gives $1 cash, scaling and costs are normal and Gems are normal.
+**Normal:** Score of 10 gives $1 cash, scaling and costs are normal and Gems are normal.
 
-**Hard:** Score of $20 gives $1 cash shop costs are 1.5 times higher power‑up drops are as many and Gems double.
+**Hard:** Score of 20 gives $1 cash shop costs are 1.5 times higher, power‑up drops are 50% lower and Gems doubled.
 
 - **💾 In-Run Pause & Save System:**
 

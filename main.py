@@ -20,9 +20,10 @@ PURPLE = (155, 89, 182)
 DARK_GRAY = (40, 40, 50)
 LIGHT_BLUE = (52, 152, 219)
 PINK = (255, 105, 180)
+GOLD = (255, 215, 0)
 SAVE_FILE = "save_data.json"
 
-# 25 Permanent Gem Upgrades Definition
+# Permanent Gem Upgrades Definition
 GEM_UPGRADES_DEF = [
     {"id": "gem_life", "name": "Extra Starting Life", "max": 5, "base_cost": 10,
      "desc": "Start runs with +1 life per tier"},
@@ -67,12 +68,19 @@ GEM_UPGRADES_DEF = [
      "desc": "Rare chance for bricks to drop bonus Gems"},
     {"id": "gem_upgrade_disc", "name": "Wholesale", "max": 5, "base_cost": 40,
      "desc": "Shop upgrades cost 5% less per tier"},
-    {"id": "gem_max_lives", "name": "Iron Will", "max": 5, "base_cost": 50, "desc": "+1 maximum life capacity per tier"}
+    {"id": "gem_max_lives", "name": "Iron Will", "max": 5, "base_cost": 50,
+     "desc": "+1 maximum life capacity per tier"},
+    {"id": "gem_laser_pen", "name": "Piercing Lasers", "max": 3, "base_cost": 80,
+     "desc": "Lasers pierce through +1 brick per tier"},
+    {"id": "gem_bounty", "name": "Bounty Hunter", "max": 5, "base_cost": 60,
+     "desc": "+$25 cash when destroying Special Bricks"},
+    {"id": "gem_unbreakable_dam", "name": "Barrier Breaker", "max": 1, "base_cost": 100,
+     "desc": "High damage balls can damage unbreakable bricks"}
 ]
 
 ACHIEVEMENT_DEFINITIONS = [
     ("default_settler", "Default Settler", "Start a game without changing default settings"),
-    ("rich_gamer", "High Roller", "Accumulate at least $500 cash in a single run"),
+    ("rich_gamer", "Money Maker", "Accumulate at least $5,000 cash in a single run"),
     ("first_steps", "First Steps", "Clear Level 1"),
     ("laser_master", "Laser Master", "Upgrade Laser System to Tier 5"),
     ("multiball_mayhem", "Multiball Mayhem", "Have 5 or more balls active on screen"),
@@ -82,7 +90,14 @@ ACHIEVEMENT_DEFINITIONS = [
     ("hardcore_survivor", "Hardcore Survivor", "Complete a level on Hard difficulty"),
     ("magnetized", "Magnetized", "Catch a ball with the Magnet Paddle"),
     ("brick_breaker", "Brick Breaker", "Reach 1,000 points in a single run"),
-    ("level_5_vet", "Level 5 Veteran", "Reach Level 5 in a run")
+    ("level_5_vet", "Level 5 Veteran", "Reach Level 5 in a run"),
+    # Hardcore Achievements
+    ("untouchable", "Untouchable", "Reach Level 5 without losing any lives"),
+    ("unstoppable", "Unstoppable Force", "Destroy 500 total bricks across all runs"),
+    ("gem_billionaire", "Gem Billionaire", "Possess 1,000 or more total Gems"),
+    ("god_of_war", "God of War", "Reach Level 15 in a single run"),
+    ("laser_overlord", "Laser Overlord", "Destroy 100 bricks using lasers"),
+    ("hardcore_legend", "Hardcore Legend", "Reach Level 10 on HARD difficulty")
 ]
 
 def load_save_data():
@@ -94,6 +109,8 @@ def load_save_data():
                 if "gems" not in data: data["gems"] = 0
                 if "gem_upgrades" not in data: data["gem_upgrades"] = {}
                 if "difficulty" not in data: data["difficulty"] = "normal"
+                if "total_bricks_destroyed" not in data: data["total_bricks_destroyed"] = 0
+                if "laser_kills" not in data: data["laser_kills"] = 0
                 if "achievements" not in data:
                     data["achievements"] = default_achievements
                 else:
@@ -108,6 +125,8 @@ def load_save_data():
         "gem_upgrades": {},
         "difficulty": "normal",
         "active_run": None,
+        "total_bricks_destroyed": 0,
+        "laser_kills": 0,
         "achievements": default_achievements
     }
 
@@ -160,6 +179,7 @@ class Ball:
         self.radius = 9
         self.damage = damage
         self.is_multiball = is_multiball
+        self.is_fireball = False
         self.respawn_timer = 0
         self.stuck_to_paddle = False
     
@@ -187,7 +207,7 @@ class Ball:
     
     def draw(self, surface):
         if self.respawn_timer > 0: return
-        color = PURPLE if self.is_multiball else WHITE
+        color = ORANGE if self.is_fireball else (PURPLE if self.is_multiball else WHITE)
         pygame.draw.circle(surface, color, (int(self.x), int(self.y)), self.radius)
         pygame.draw.circle(surface, CYAN, (int(self.x), int(self.y)), self.radius - 3)
 
@@ -196,10 +216,16 @@ class Brick:
         self.rect = pygame.Rect(x, y, 74, 22)
         self.max_hp = hp
         self.hp = hp
-        self.type = brick_type
+        self.type = brick_type  # 'normal', 'reinforced', 'unbreakable', 'explosive', 'glitch', 'speed'
         
         if self.type == 'unbreakable':
             self.color = DARK_GRAY
+        elif self.type == 'explosive':
+            self.color = RED
+        elif self.type == 'glitch':
+            self.color = CYAN
+        elif self.type == 'speed':
+            self.color = YELLOW
         elif self.hp >= 3:
             self.color = PURPLE
         elif self.hp == 2:
@@ -211,8 +237,12 @@ class Brick:
         color = self.color
         if self.type == 'reinforced' and self.hp == 1: color = YELLOW
         pygame.draw.rect(surface, color, self.rect, border_radius=4)
-        pygame.draw.rect(surface, WHITE, self.rect, 1, border_radius=4)
-        if self.type != 'unbreakable' and self.max_hp > 1:
+        
+        border_col = GOLD if self.type in ['explosive', 'glitch', 'speed'] else WHITE
+        pygame.draw.rect(surface, border_col, self.rect, 2 if self.type in ['explosive', 'glitch', 'speed'] else 1,
+                         border_radius=4)
+        
+        if self.type not in ['unbreakable', 'explosive', 'glitch', 'speed'] and self.max_hp > 1:
             font = pygame.font.SysFont("Arial", 14, bold=True)
             txt = font.render(str(self.hp), True, WHITE)
             surface.blit(txt, (self.rect.centerx - txt.get_width() // 2, self.rect.centery - txt.get_height() // 2))
@@ -240,7 +270,7 @@ class Particle:
 class BreakoutGame:
     def __init__(self):
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Ultimate Arcade Breakout")
+        pygame.display.set_caption("Arcade Breakout Pro")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Arial", 20, bold=True)
         self.title_font = pygame.font.SysFont("Arial", 40, bold=True)
@@ -251,6 +281,7 @@ class BreakoutGame:
         self.notifications = []
         self.gem_shop_page = 0
         self.shop_spent_in_visit = 0
+        self.run_starting_lives = 3
         
         self.init_ui_buttons()
     
@@ -301,6 +332,7 @@ class BreakoutGame:
         self.money = gem_cash * 50
         self.level = 1
         self.lives = 3 + gem_life
+        self.run_starting_lives = self.lives
         self.score_multiplier = 1.0 + (self.get_gem_level("gem_score") * 0.1)
         self.laser_enabled = (gem_laser > 0)
         self.laser_cooldown_timer = 0
@@ -335,6 +367,7 @@ class BreakoutGame:
             "money": self.money,
             "level": self.level,
             "lives": self.lives,
+            "starting_lives": self.run_starting_lives,
             "score_multiplier": self.score_multiplier,
             "laser_enabled": self.laser_enabled,
             "shield_charges": self.shield_charges,
@@ -342,8 +375,8 @@ class BreakoutGame:
             "paddle_x": self.paddle.rect.x,
             "paddle_width": self.paddle.width,
             "run_upgrades": self.run_upgrades,
-            "balls": [{"x": b.x, "y": b.y, "dx": b.dx, "dy": b.dy, "damage": b.damage, "is_multiball": b.is_multiball}
-                      for b in self.balls],
+            "balls": [{"x": b.x, "y": b.y, "dx": b.dx, "dy": b.dy, "damage": b.damage, "is_multiball": b.is_multiball,
+                       "is_fireball": b.is_fireball} for b in self.balls],
             "bricks": [{"x": b.rect.x, "y": b.rect.y, "hp": b.hp, "max_hp": b.max_hp, "type": b.type} for b in
                        self.bricks]
         }
@@ -357,6 +390,7 @@ class BreakoutGame:
         self.money = run["money"]
         self.level = run["level"]
         self.lives = run["lives"]
+        self.run_starting_lives = run.get("starting_lives", self.lives)
         self.score_multiplier = run["score_multiplier"]
         self.laser_enabled = run["laser_enabled"]
         self.shield_charges = run["shield_charges"]
@@ -366,10 +400,17 @@ class BreakoutGame:
         self.paddle = Paddle(6.0, run["paddle_width"])
         self.paddle.rect.x = run["paddle_x"]
         
-        self.balls = [Ball(b["x"], b["y"], b["dx"], b["dy"], damage=b["damage"], is_multiball=b["is_multiball"]) for b
-                      in run["balls"]]
-        self.bricks = [Brick(b["x"], b["y"], b["hp"], b["type"]) for b in run["bricks"]]
-        for b in self.bricks: b.max_hp = b["max_hp"]
+        self.balls = []
+        for b in run["balls"]:
+            ball = Ball(b["x"], b["y"], b["dx"], b["dy"], damage=b["damage"], is_multiball=b["is_multiball"])
+            ball.is_fireball = b.get("is_fireball", False)
+            self.balls.append(ball)
+        
+        self.bricks = []
+        for b in run["bricks"]:
+            brick = Brick(b["x"], b["y"], b["hp"], b["type"])
+            brick.max_hp = b["max_hp"]
+            self.bricks.append(brick)
         
         self.powerups = []
         self.lasers = []
@@ -390,6 +431,7 @@ class BreakoutGame:
         save_game_data(self.save_data)
         
         if self.save_data["gems"] >= 50: self.unlock_achievement("gem_collector")
+        if self.save_data["gems"] >= 1000: self.unlock_achievement("gem_billionaire")
         self.add_steam_popup("RUN ENDED", f"Earned +{gems_earned} Gems!")
         self.state = "GAMEOVER"
     
@@ -431,10 +473,19 @@ class BreakoutGame:
                 if skip: continue
                 
                 rand = random.random()
-                if self.level >= 3 and row == 0 and rand < 0.25:
+                if self.level >= 3 and row == 0 and rand < 0.20:
                     b_type = 'unbreakable';
                     hp = 999
-                elif rand < 0.3:
+                elif rand < 0.08:
+                    b_type = 'explosive';
+                    hp = 1
+                elif rand < 0.15:
+                    b_type = 'glitch';
+                    hp = 1
+                elif rand < 0.22:
+                    b_type = 'speed';
+                    hp = 1
+                elif rand < 0.40:
                     b_type = 'reinforced';
                     hp = max(1, int(2 * hp_mult))
                 else:
@@ -513,7 +564,7 @@ class BreakoutGame:
                 elif self.btn_gem_prev.is_clicked(event) and self.gem_shop_page > 0:
                     self.gem_shop_page -= 1;
                     self.setup_gem_shop_buttons()
-                elif self.btn_gem_next.is_clicked(event) and self.gem_shop_page < 4:
+                elif self.btn_gem_next.is_clicked(event) and self.gem_shop_page < 5:
                     self.gem_shop_page += 1;
                     self.setup_gem_shop_buttons()
                 else:
@@ -527,6 +578,7 @@ class BreakoutGame:
                                 self.save_data["gem_upgrades"][up_def["id"]] = tier + 1
                                 save_game_data(self.save_data)
                                 if self.save_data["gems"] >= 50: self.unlock_achievement("gem_collector")
+                                if self.save_data["gems"] >= 1000: self.unlock_achievement("gem_billionaire")
                                 self.setup_gem_shop_buttons()
             
             elif self.state == "PAUSED":
@@ -551,7 +603,7 @@ class BreakoutGame:
                             
                             if self.run_upgrades["laser_tier"] >= 5: self.unlock_achievement("laser_master")
                             if self.shop_spent_in_visit >= 300: self.unlock_achievement("big_spender")
-                            if self.money >= 500: self.unlock_achievement("rich_gamer")
+                            if self.money >= 5000: self.unlock_achievement("rich_gamer")
                             
                             upgrade["tier"] = self.run_upgrades[upgrade["key"]]
                             upgrade["cost"] = int(upgrade["base_cost"] * (2.0 ** upgrade["tier"]))
@@ -571,8 +623,14 @@ class BreakoutGame:
                 if self.btn_next_level and self.btn_next_level.is_clicked(event):
                     if self.level == 1: self.unlock_achievement("first_steps")
                     if self.save_data["difficulty"] == "hard": self.unlock_achievement("hardcore_survivor")
+                    if self.lives >= self.run_starting_lives and self.level >= 5: self.unlock_achievement("untouchable")
+                    
                     self.level += 1
                     if self.level >= 5: self.unlock_achievement("level_5_vet")
+                    if self.level >= 15: self.unlock_achievement("god_of_war")
+                    if self.level >= 10 and self.save_data["difficulty"] == "hard": self.unlock_achievement(
+                        "hardcore_legend")
+                    
                     interest = 1.0 + (self.get_gem_level("gem_interest") * 0.03)
                     self.money = int(self.money * interest)
                     self.balls.clear()
@@ -619,11 +677,14 @@ class BreakoutGame:
             self.laser_cooldown_timer = cooldown_map.get(tier, 6)
             
             if tier >= 5:
-                self.lasers.append(pygame.Rect(self.paddle.rect.left + 10, self.paddle.rect.top, 4, 18))
-                self.lasers.append(pygame.Rect(self.paddle.rect.right - 14, self.paddle.rect.top, 4, 18))
+                self.lasers.append({"rect": pygame.Rect(self.paddle.rect.left + 10, self.paddle.rect.top, 4, 18),
+                                    "pen": self.get_gem_level("gem_laser_pen")})
+                self.lasers.append({"rect": pygame.Rect(self.paddle.rect.right - 14, self.paddle.rect.top, 4, 18),
+                                    "pen": self.get_gem_level("gem_laser_pen")})
             else:
                 pcx = (self.paddle.rect.left + self.paddle.rect.right) // 2
-                self.lasers.append(pygame.Rect(pcx - 2, self.paddle.rect.top, 4, 18))
+                self.lasers.append({"rect": pygame.Rect(pcx - 2, self.paddle.rect.top, 4, 18),
+                                    "pen": self.get_gem_level("gem_laser_pen")})
     
     def prepare_shop(self):
         self.shop_spent_in_visit = 0
@@ -632,7 +693,7 @@ class BreakoutGame:
         earned_money = (self.score // score_divisor) * (1 + self.run_upgrades["coin_tier"])
         self.money += earned_money
         
-        if self.money >= 500: self.unlock_achievement("rich_gamer")
+        if self.money >= 5000: self.unlock_achievement("rich_gamer")
         
         self.reroll_cost = 25
         self.btn_reroll = Button(WIDTH // 2 - 120, HEIGHT - 140, 240, 45, f"Reroll Shop ($25)", PURPLE)
@@ -680,9 +741,45 @@ class BreakoutGame:
     
     def get_random_powerup(self):
         choices = ["Wider Paddle", "Multiball (+2)", "2x Score", "Speed Up", "Extra Life", "Slow Ball", "Giant Ball",
-                   "Shield Wall", "Magnet Paddle", "Cash Surge"]
+                   "Shield Wall", "Magnet Paddle", "Cash Surge", "Fireball", "Nuke"]
         if not self.laser_enabled: choices.append("Laser Enabled")
         return random.choice(choices)
+    
+    def trigger_brick_destruction(self, brick, by_laser=False):
+        if brick in self.bricks:
+            self.score += int(10 * self.score_multiplier)
+            self.save_data["total_bricks_destroyed"] += 1
+            
+            if by_laser:
+                self.save_data["laser_kills"] += 1
+                if self.save_data["laser_kills"] >= 100: self.unlock_achievement("laser_overlord")
+            
+            if self.save_data["total_bricks_destroyed"] >= 500: self.unlock_achievement("unstoppable")
+            
+            if brick.type in ['explosive', 'glitch', 'speed']:
+                self.money += self.get_gem_level("gem_bounty") * 25
+            
+            num_p = 15 if self.get_gem_level("gem_particles") > 0 else 10
+            for _ in range(num_p):
+                self.particles.append(Particle(brick.rect.centerx, brick.rect.centery, brick.color))
+            
+            # Handle Explosive Brick Radius
+            if brick.type == 'explosive':
+                self.add_notification("BOOM!", RED)
+                for other in self.bricks[:]:
+                    if other != brick and other.type != 'unbreakable':
+                        if math.hypot(other.rect.centerx - brick.rect.centerx,
+                                      other.rect.centery - brick.rect.centery) < 120:
+                            self.bricks.remove(other)
+            
+            diff = self.save_data["difficulty"]
+            drop_chance = {"easy": 0.375, "normal": 0.25, "hard": 0.125}[diff] + (self.get_gem_level("gem_drop") * 0.05)
+            if random.random() < drop_chance:
+                u_type = self.get_random_powerup()
+                self.powerups.append(
+                    {"rect": pygame.Rect(brick.rect.centerx - 12, brick.rect.centery - 12, 24, 24), "type": u_type})
+            
+            self.bricks.remove(brick)
     
     def update(self):
         for popup in self.steam_popups[:]:
@@ -765,37 +862,39 @@ class BreakoutGame:
             
             for brick in self.bricks[:]:
                 if ball_rect.colliderect(brick.rect):
+                    # Handle Special Speed Brick
+                    if brick.type == 'speed':
+                        ball.dx *= 1.5;
+                        ball.dy *= 1.5
+                    
+                    # Handle Glitch Brick Teleport
+                    if brick.type == 'glitch' and random.random() < 0.5:
+                        brick.rect.x = random.randint(50, WIDTH - 120)
+                        brick.rect.y = random.randint(80, 250)
+                        self.add_notification("Glitched!", CYAN)
+                        break
+                    
                     ol = ball_rect.right - brick.rect.left;
                     oright = brick.rect.right - ball_rect.left
                     ot = ball_rect.bottom - brick.rect.top;
                     ob = brick.rect.bottom - ball_rect.top
                     min_o = min(ol, oright, ot, ob)
-                    if min_o == ot or min_o == ob:
-                        ball.dy = -ball.dy
-                    else:
-                        ball.dx = -ball.dx
                     
-                    if brick.type != 'unbreakable':
+                    if not ball.is_fireball:
+                        if min_o == ot or min_o == ob:
+                            ball.dy = -ball.dy
+                        else:
+                            ball.dx = -ball.dx
+                    
+                    if brick.type != 'unbreakable' or (
+                            self.get_gem_level("gem_unbreakable_dam") > 0 and ball.damage >= 3):
                         crit_chance = self.get_gem_level("gem_crit") * 0.04
-                        dmg = ball.damage * (2 if random.random() < crit_chance else 1)
+                        dmg = (ball.damage * 2) if ball.is_fireball else ball.damage * (
+                            2 if random.random() < crit_chance else 1)
                         brick.hp -= dmg
                         
                         if brick.hp <= 0:
-                            self.score += int(10 * self.score_multiplier)
-                            num_p = 15 if self.get_gem_level("gem_particles") > 0 else 10
-                            for _ in range(num_p):
-                                self.particles.append(Particle(brick.rect.centerx, brick.rect.centery, brick.color))
-                            
-                            diff = self.save_data["difficulty"]
-                            drop_chance = {"easy": 0.375, "normal": 0.25, "hard": 0.125}[diff] + (
-                                        self.get_gem_level("gem_drop") * 0.05)
-                            if random.random() < drop_chance:
-                                u_type = self.get_random_powerup()
-                                self.powerups.append(
-                                    {"rect": pygame.Rect(brick.rect.centerx - 12, brick.rect.centery - 12, 24, 24),
-                                     "type": u_type})
-                            
-                            self.bricks.remove(brick)
+                            self.trigger_brick_destruction(brick, by_laser=False)
                     break
             
             if ball.y - ball.radius >= HEIGHT:
@@ -833,21 +932,22 @@ class BreakoutGame:
                 self.powerups.remove(pu)
         
         for laser in self.lasers[:]:
-            laser.y -= int(12 * (1.0 + self.get_gem_level("gem_laser_speed") * 0.2))
+            laser["rect"].y -= int(12 * (1.0 + self.get_gem_level("gem_laser_speed") * 0.2))
             laser_removed = False
             for brick in self.bricks[:]:
-                if laser.colliderect(brick.rect):
+                if laser["rect"].colliderect(brick.rect):
                     if brick.type != 'unbreakable':
                         brick.hp -= 1
                         if brick.hp <= 0:
-                            self.score += int(10 * self.score_multiplier)
-                            for _ in range(8):
-                                self.particles.append(Particle(brick.rect.centerx, brick.rect.centery, brick.color))
-                            self.bricks.remove(brick)
-                    self.lasers.remove(laser)
-                    laser_removed = True
+                            self.trigger_brick_destruction(brick, by_laser=True)
+                    
+                    if laser["pen"] > 0:
+                        laser["pen"] -= 1
+                    else:
+                        self.lasers.remove(laser)
+                        laser_removed = True
                     break
-            if not laser_removed and laser.bottom <= 0: self.lasers.remove(laser)
+            if not laser_removed and laser["rect"].bottom <= 0: self.lasers.remove(laser)
         
         breakable = [b for b in self.bricks if b.type != 'unbreakable']
         if not breakable:
@@ -882,6 +982,12 @@ class BreakoutGame:
             self.magnet_active = True
         elif u_type == "Cash Surge":
             self.money += 75
+        elif u_type == "Fireball":
+            for b in self.balls: b.is_fireball = True
+        elif u_type == "Nuke":
+            targets = [b for b in self.bricks if b.type != 'unbreakable']
+            for b in random.sample(targets, min(3, len(targets))):
+                self.trigger_brick_destruction(b)
         elif u_type == "Laser Enabled":
             self.laser_enabled = True
     
@@ -889,7 +995,7 @@ class BreakoutGame:
         self.screen.fill(BLACK)
         
         if self.state == "MENU":
-            title = self.title_font.render("ULTIMATE BREAKOUT ARCADE", True, CYAN)
+            title = self.title_font.render("BREAKOUT ARCADE PRO", True, CYAN)
             self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 110))
             
             gems_txt = self.font.render(
@@ -926,24 +1032,24 @@ class BreakoutGame:
         
         elif self.state == "ACHIEVEMENTS":
             title = self.title_font.render("ACHIEVEMENTS", True, PURPLE)
-            self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
+            self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
             
             for i, (key, name, desc) in enumerate(ACHIEVEMENT_DEFINITIONS):
                 unlocked = self.save_data["achievements"].get(key, False)
                 status = "[UNLOCKED]" if unlocked else "[LOCKED]"
                 col = GREEN if unlocked else RED
                 
-                y_pos = 110 + (i * 50)
-                name_txt = pygame.font.SysFont("Arial", 16, bold=True).render(f"{name} {status}", True, col)
-                desc_txt = pygame.font.SysFont("Arial", 14).render(desc, True, WHITE)
+                y_pos = 95 + (i * 38)
+                name_txt = pygame.font.SysFont("Arial", 14, bold=True).render(f"{name} {status}", True, col)
+                desc_txt = pygame.font.SysFont("Arial", 12).render(desc, True, WHITE)
                 
-                self.screen.blit(name_txt, (WIDTH // 2 - 280, y_pos))
-                self.screen.blit(desc_txt, (WIDTH // 2 - 280, y_pos + 20))
+                self.screen.blit(name_txt, (WIDTH // 2 - 300, y_pos))
+                self.screen.blit(desc_txt, (WIDTH // 2 - 300, y_pos + 16))
             
             self.btn_ach_back.draw(self.screen, self.btn_ach_back.rect.collidepoint(pygame.mouse.get_pos()))
         
         elif self.state == "GEM_SHOP":
-            title = self.title_font.render(f"GEM UPGRADES (Page {self.gem_shop_page + 1}/5)", True, PINK)
+            title = self.title_font.render(f"GEM UPGRADES (Page {self.gem_shop_page + 1}/6)", True, PINK)
             self.screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
             
             gems_txt = self.font.render(f"Available Gems: 💎 {self.save_data['gems']}", True, YELLOW)
@@ -1017,7 +1123,7 @@ class BreakoutGame:
             for pu in self.powerups:
                 pygame.draw.rect(self.screen, PURPLE, pu["rect"], border_radius=4)
                 pygame.draw.rect(self.screen, WHITE, pu["rect"], 2, border_radius=4)
-            for laser in self.lasers: pygame.draw.rect(self.screen, CYAN, laser, border_radius=2)
+            for laser in self.lasers: pygame.draw.rect(self.screen, CYAN, laser["rect"], border_radius=2)
             for p in self.particles: p.draw(self.screen)
             for note in self.notifications:
                 self.screen.blit(self.font.render(note["text"], True, note["color"]),
