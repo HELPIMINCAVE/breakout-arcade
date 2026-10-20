@@ -1,6 +1,6 @@
 # 🚀 Ultimate Arcade Breakout
 
-A game that is full of features and runs fast. Game is a PyGame** breakout arcade game that has roguelike meta‑progression, dynamic difficulty scaling many power‑ups, random brick layouts and a lasting Gem economy!
+A game that is full of features and runs fast. Game is a **PyGame** breakout arcade game that has roguelike meta‑progression, dynamic difficulty scaling many power‑ups, random brick layouts and a lasting Gem economy!
 
 ---
 
