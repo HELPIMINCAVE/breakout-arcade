@@ -1,0 +1,7 @@
+# Files
+save_data.json
+
+# Pygame
+__pycache__/
+.venv/
+.idea/
